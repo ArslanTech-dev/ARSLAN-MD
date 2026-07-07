@@ -16,4 +16,20 @@ git clone https://github.com/USERNAME/ARS-MD-PRO
 cd ARS-MD-PRO
 npm install
 node index.js
+# 🤖 ARS-MD PRO v5.0
 
+### ⚡ FEATURES
+```yaml
+GROUP: 
+    - .kick @tag - Remove member
+    - .antilink on/off - Auto kick group links
+    - .antidelete on/off - Catch deleted messages
+
+TOOLS:
+    - .vv - View Once opener
+    - .ping - Check bot speed & RAM
+    - .menu - Show all commands
+
+SECURITY:
+    - Pairing Code Login
+    - Multi Device Support
