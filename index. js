@@ -1,0 +1,241 @@
+const fs = require('fs');
+const pino = require('pino');
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, downloadMediaMessage, fetchLatestBaileysVersion, delay } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+
+const OWNER_NUMBER = '923046490245' // Apna number lagao bina +
+const BOT_NAME = 'ARS-MD PRO'
+
+let msgStore = {};
+let groupSettings = {};
+
+function runtime(seconds) {
+    seconds = Number(seconds);
+    var d = Math.floor(seconds / (3600 * 24));
+    var h = Math.floor(seconds % (3600 * 24) / 3600);
+    var m = Math.floor(seconds % 3600 / 60);
+    var s = Math.floor(seconds % 60);
+    return `${d}d ${h}h ${m}m ${s}s`;
+}
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('session');
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+        version,
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false
+    });
+
+    if (!state.creds.registered) {
+        console.log(`[!] Waiting 20 sec for pairing code +${OWNER_NUMBER}...`)
+        await delay(20000)
+        try {
+            const code = await sock.requestPairingCode(OWNER_NUMBER)
+            console.log(`\n╔═══════════════╗`)
+            console.log(`║ 🔑 PAIRING CODE: ${code} ║`)
+            console.log(`║ WhatsApp > Linked Devices ║`)
+            console.log(`╚═══════════════╝\n`)
+        } catch (err) {
+            console.error('Pairing error:', err.message)
+            setTimeout(() => process.exit(1), 5000)
+        }
+    }
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async (m) => {
+        let msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        // Msg store for AntiDelete + VV
+        msgStore[msg.key.id] = msg;
+        setTimeout(() => delete msgStore[msg.key.id], 300000);
+
+        let text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        let from = msg.key.remoteJid;
+        let sender = msg.key.participant || msg.key.remoteJid;
+
+        // Admin check
+        async function isAdmin(jid, user) {
+            try {
+                let groupMeta = await sock.groupMetadata(jid);
+                let admins = groupMeta.participants.filter(p => p.admin).map(p => p.id);
+                return admins.includes(user);
+            } catch { return false }
+        }
+
+        // Group settings init
+        if (from.endsWith('@g.us') &&!groupSettings[from]) {
+            groupSettings[from] = { antidelete: false, antilink: false }
+        }
+
+        // ===== MENU =====
+        if (text === '.menu' || text === '.allmenu') {
+            let uptime = runtime(process.uptime());
+            let ram = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
+
+            let menu = `*╭────⬡ ${BOT_NAME} ⬡────⭓*
+*├▢ 🤖 Owner:* ARSLAN
+*├▢ 📜 Commands:* 250+
+*├▢ ⏱️ Runtime:* ${uptime}
+*├▢ 📟 RAM:* ${ram} MB
+*├▢ 📡 Baileys:* Multi Device
+*├▢ ☁️ Platform:* Linux
+*├▢ 📦 Prefix:*.
+*├▢ ⚙️ Mode:* Public
+*├▢ 🏷️ Version:* 5.0.0 Bᴇᴛᴀ
+*╰─────────────────⭓*
+
+*╭────⬡ GROUP MENU ⬡────*
+*├▢.kick @tag* - Kick member
+*├▢.antilink on/off* - Link protection
+*╰────────────────*
+
+*╭────⬡ TOOLS MENU ⬡────*
+*├▢.ping* - Speed check
+*├▢.vv* - View Once opener
+*╰────────────────*
+
+*╭────⬡ SETTING MENU ⬡────*
+*├▢.antidelete on/off*
+*╰────────────────*`;
+
+            try {
+                await sock.sendMessage(from, {
+                    image: fs.readFileSync('./arslan.jpg'),
+                    caption: menu
+                }, { quoted: msg });
+            } catch {
+                await sock.sendMessage(from, { text: menu }, { quoted: msg });
+            }
+        }
+
+        // ===== FANCY PING =====
+        if (text === '.ping') {
+            let start = new Date().getTime();
+            let p = await sock.sendMessage(from, { text: '🏓 Pinging...' }, { quoted: msg });
+            let end = new Date().getTime();
+            let speed = end - start;
+            let ram = (process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2);
+
+            await sock.sendMessage(from, {
+                text: `*╭────⬡ PING RESULT ⬡────⭓*
+*├▢ 🏓 Speed:* ${speed}ms
+*├▢ ⚡ Status:* Online ✅
+*├▢ 💾 RAM:* ${ram} MB
+*├▢ ⏱️ Uptime:* ${runtime(process.uptime())}
+*╰─────────────────⭓*`,
+                edit: p.key
+            });
+        }
+
+        // ===== VV COMMAND =====
+        if (text === '.vv' || text === '.viewonce') {
+            if (!msg.message.extendedTextMessage?.contextInfo?.quotedMessage) {
+                return sock.sendMessage(from, { text: '❌ Reply karo view once wali pic/video pe' }, { quoted: msg });
+            }
+            let quoted = msg.message.extendedTextMessage.contextInfo.quotedMessage;
+
+            if (quoted.viewOnceMessageV2?.message?.imageMessage) {
+                let media = await downloadMediaMessage({ message: quoted.viewOnceMessageV2.message.imageMessage }, 'buffer', {}, { logger: pino() });
+                await sock.sendMessage(from, { image: media, caption: '📸 View Once Image' }, { quoted: msg });
+            }
+            else if (quoted.viewOnceMessageV2?.message?.videoMessage) {
+                let media = await downloadMediaMessage({ message: quoted.viewOnceMessageV2.message.videoMessage }, 'buffer', {}, { logger: pino() });
+                await sock.sendMessage(from, { video: media, caption: '🎥 View Once Video' }, { quoted: msg });
+            }
+            else {
+                await sock.sendMessage(from, { text: '❌ Sirf view once pic/video pe kaam karega' }, { quoted: msg });
+            }
+        }
+
+        // ===== KICK COMMAND =====
+        if (text.startsWith('.kick ')) {
+            if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: '❌ Sirf group me' }, { quoted: msg });
+            if (!await isAdmin(from, sender)) return sock.sendMessage(from, { text: '❌ Sirf admin use kar sakta hai' }, { quoted: msg });
+
+            let mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
+            if (!mentioned || mentioned.length === 0) return sock.sendMessage(from, { text: '❌ @tag karo jisko kick karna hai' }, { quoted: msg });
+
+            await sock.groupParticipantsUpdate(from, mentioned, 'remove');
+            await sock.sendMessage(from, { text: `✅ @${mentioned[0].split('@')[0]} ko nikal diya`, mentions: mentioned }, { quoted: msg });
+        }
+
+        // ===== ANTILINK =====
+        if (text === '.antilink on') {
+            if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: '❌ Sirf group me' }, { quoted: msg });
+            if (!await isAdmin(from, sender)) return sock.sendMessage(from, { text: '❌ Sirf admin use kar sakta hai' }, { quoted: msg });
+            groupSettings[from].antilink = true;
+            await sock.sendMessage(from, { text: '✅ Antilink ON\nGroup link bhejne wala auto kick' }, { quoted: msg });
+        }
+        if (text === '.antilink off') {
+            if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: '❌ Sirf group me' }, { quoted: msg });
+            if (!await isAdmin(from, sender)) return sock.sendMessage(from, { text: '❌ Sirf admin use kar sakta hai' }, { quoted: msg });
+            groupSettings[from].antilink = false;
+            await sock.sendMessage(from, { text: '❌ Antilink OFF' }, { quoted: msg });
+        }
+
+        // ===== ANTIDELETE =====
+        if (text === '.antidelete on') {
+            if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: '❌ Sirf group me' }, { quoted: msg });
+            groupSettings[from].antidelete = true;
+            await sock.sendMessage(from, { text: '✅ AntiDelete ON ho gaya' }, { quoted: msg });
+        }
+        if (text === '.antidelete off') {
+            if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: '❌ Sirf group me' }, { quoted: msg });
+            groupSettings[from].antidelete = false;
+            await sock.sendMessage(from, { text: '❌ AntiDelete OFF ho gaya' }, { quoted: msg });
+        }
+
+        // ===== ANTILINK DETECTOR =====
+        let linkRegex = /chat.whatsapp.com\/([A-Za-z0-9]{20,24})/i;
+        if (from.endsWith('@g.us') && groupSettings[from]?.antilink) {
+            if (linkRegex.test(text)) {
+                let groupInvite = await sock.groupInviteCode(from);
+                if (text.includes(groupInvite)) return;
+                if (await isAdmin(from, sender)) return;
+                await sock.sendMessage(from, {
+                    text: `🚫 *Antilink Alert*\n\n👤 @${sender.split('@')[0]} ne group link bheja\nKick kar diya gaya`,
+                    mentions: [sender]
+                });
+                await sock.groupParticipantsUpdate(from, [sender], 'remove');
+            }
+        }
+    });
+
+    // ===== ANTI DELETE DETECTOR =====
+    sock.ev.on('messages.delete', async (del) => {
+        try {
+            let jid = del.keys[0].remoteJid;
+            if (!groupSettings[jid]?.antidelete) return;
+            let deletedMsg = msgStore[del.keys[0].id];
+            if (!deletedMsg) return;
+            let sender = deletedMsg.key.participant || deletedMsg.key.remoteJid;
+            let name = sender.split('@')[0];
+            await sock.sendMessage(jid, {
+                text: `🗑️ *AntiDelete Alert*\n\n👤 @${name} ne message delete kiya\n📝 *Deleted Message:*`,
+                mentions: [sender]
+            });
+            await sock.sendMessage(jid, { forward: deletedMsg });
+        } catch (e) {
+            console.log('AntiDelete Error:', e);
+        }
+    });
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            let reason = new Boom(lastDisconnect.error).output.statusCode;
+            if (reason!== DisconnectReason.loggedOut) {
+                startBot();
+            }
+        } else if (connection === 'open') {
+            console.log(`═══ [ ${BOT_NAME} ONLINE ] ═══`);
+        }
+    });
+}
+
+startBot();
