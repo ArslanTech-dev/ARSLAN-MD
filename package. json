@@ -1,0 +1,16 @@
+{
+  "name": "ars-md-pro",
+  "version": "5.0.0",
+  "description": "Advanced WhatsApp Bot by Arslan",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.12",
+    "@hapi/boom": "^10.0.1",
+    "pino": "^9.3.2"
+  },
+  "author": "Arslan",
+  "license": "MIT"
+}
