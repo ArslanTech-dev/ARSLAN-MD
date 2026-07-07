@@ -1,0 +1,30 @@
+# Use Node 20 Alpine - Lightweight and fast
+FROM node:20-alpine
+
+# Author info
+LABEL maintainer="Arslan <923046490245>"
+LABEL description="ARS-MD PRO WhatsApp Bot"
+
+# Set working directory
+WORKDIR /root/ars-md-pro
+
+# Install system dependencies for baileys + ffmpeg
+RUN apk add --no-cache git ffmpeg imagemagick
+
+# Copy package files first for cache
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install --production
+
+# Copy all bot files
+COPY . .
+
+# Create session folder
+RUN mkdir -p session
+
+# Expose port if needed later
+EXPOSE 3000
+
+# Start command
+CMD ["npm", "start"]
