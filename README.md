@@ -33,3 +33,8 @@ TOOLS:
 SECURITY:
     - Pairing Code Login
     - Multi Device Support
+
+### 🐳 DOCKER DEPLOY - 1 CLICK
+```bash
+docker build -t ars-md-pro .
+docker run -it -v $(pwd)/session:/root/ars-md-pro/session ars-md-pro
