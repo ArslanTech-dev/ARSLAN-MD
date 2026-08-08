@@ -2,34 +2,39 @@
 // CREATED BY: ARSLAN TECH'S
 // DATE: 2026
 // ═══════════════════════════════════════════════════════════════
+import express from 'express';
+const app = express();
+app.get('/', (req,res) => res.send('ARSLAN-MD Running'));
+app.listen(process.env.PORT || 3000);
 
-const { Boom } = require('@hapi/boom');
-const {
-    default: makeWASocket,
+import { Boom } from '@hapi/boom';
+import {
+    default as makeWASocket,
     DisconnectReason,
     useMultiFileAuthState,
     getContentType,
     downloadContentFromMessage,
     jidDecode,
     proto
-} = require('@whiskeysockets/baileys');
-const config = require('./config.js');
+} from '@whiskeysockets/baileys';
+import config from './config.js';
 global.BOT_NAME = config.BOT_NAME;
 global.BOT_LOGO = config.BOT_LOGO;
 global.PREFIX = config.PREFIX;
 global.BOT_NUMBER = config.BOT_NUMBER;
 global.VERSION = config.VERSION;
 
-const os = require('os');
-const pino = require('pino');
-const chalk = require('chalk');
-const fs = require('fs');
-const moment = require('moment-timezone');
-const axios = require('axios');
-const { exec } = require('child_process');
+import os from 'os';
+import pino from 'pino';
+import chalk from 'chalk';
+import fs from 'fs';
+import moment from 'moment-timezone';
+import axios from 'axios';
+import { exec } from 'child_process';
  
 let sock;
 let reconnecting = false;
+
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIG
