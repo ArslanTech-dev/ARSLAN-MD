@@ -1,4 +1,4 @@
-module.exports = {
+ const config = {
     // Bot Configuration
     BOT_NAME: 'ARSLAN MD ULTRA',
     BOT_LOGO: 'https://files.catbox.moe/94rltt.jpg',
@@ -37,3 +37,5 @@ module.exports = {
     BUSY: false,
     BUSY_REASON: 'Abhi busy hoon, baad me reply karunga!'
 };
+
+export default config;
