@@ -27,8 +27,7 @@ const fs = require('fs');
 const moment = require('moment-timezone');
 const axios = require('axios');
 const { exec } = require('child_process');
-const qrcode = require('qrcode-terminal');
-
+ 
 let sock;
 let reconnecting = false;
 
@@ -167,7 +166,7 @@ const start = async () => {
     const { state, saveCreds } = await useMultiFileAuthState('session');
     sock = makeWASocket({
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: true,
+        printQRInTerminal: flase,
         auth: state,
         browser: ['Ubuntu', 'Chrome', '20.0.04'],
         syncFullHistory: false,
@@ -180,14 +179,16 @@ const start = async () => {
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, lastDisconnect,qr} = update;
 
-        if (qr) {
-            console.log(chalk.yellow('\n========== SCAN QR ==========\n'));
-            qrcode.generate(qr, { small: true });
-            console.log(chalk.green(`Link: https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}`));
-            console.log(chalk.yellow('\n==== 10 SEC ME SCAN KARO ====\n'));
-        }
+           if (!sock.authState.creds.registered) {
+       await new Promise(resolve => setTimeout(resolve, 3000))
+       const phoneNumber = "923001234567" // <-- YAHAN APNA NUMBER +92 KE SATH
+       const code = await sock.requestPairingCode(phoneNumber)
+       console.log(chalk.green('\n========== PAIRING CODE =========='));
+       console.log(chalk.yellow(code));
+       console.log(chalk.green('==================================\n'));
+   }
 
         if (connection === 'close') {
             reconnecting = false;
